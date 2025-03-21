@@ -1,10 +1,10 @@
-ARG RUNC_VERSION=v1.2.3
-ARG CONTAINERD_VERSION=v2.0.0
+ARG RUNC_VERSION=v1.2.5
+ARG CONTAINERD_VERSION=v2.0.2
 # CONTAINERD_ALT_VERSION_... defines fallback containerd version for integration tests
-ARG CONTAINERD_ALT_VERSION_17=v1.7.23
+ARG CONTAINERD_ALT_VERSION_17=v1.7.25
 ARG CONTAINERD_ALT_VERSION_16=v1.6.36
 ARG REGISTRY_VERSION=v2.8.3
-ARG ROOTLESSKIT_VERSION=v2.3.1
+ARG ROOTLESSKIT_VERSION=v2.3.2
 ARG CNI_VERSION=v1.5.1
 ARG STARGZ_SNAPSHOTTER_VERSION=v0.15.1
 ARG NERDCTL_VERSION=v1.6.2
@@ -12,7 +12,7 @@ ARG DNSNAME_VERSION=v1.3.1
 ARG NYDUS_VERSION=v2.0.0
 ARG MINIO_VERSION=RELEASE.2023-05-04T21-44-30Z
 ARG MINIO_MC_VERSION=RELEASE.2023-05-04T18-10-16Z
-ARG AZURITE_VERSION=3.18.0
+ARG AZURITE_VERSION=3.33.0
 ARG GOTESTSUM_VERSION=v1.9.0
 ARG DELVE_VERSION=v1.23.1
 
@@ -20,6 +20,7 @@ ARG GO_VERSION=1.23
 ARG ALPINE_VERSION=3.21
 ARG XX_VERSION=1.6.1
 ARG BUILDKIT_DEBUG
+ARG EXPORT_BASE=alpine
 
 # minio for s3 integration tests
 FROM ghcr.io/loong64/minio:${MINIO_VERSION} AS minio
@@ -138,7 +139,8 @@ ARG DNSNAME_VERSION
 ADD --keep-git-dir=true "https://github.com/containers/dnsname.git#$DNSNAME_VERSION" .
 ARG TARGETPLATFORM
 RUN --mount=target=/root/.cache,type=cache \
-    xx-go get -u golang.org/x/sys && \
+    xx-go get -u golang.org/x/sys@v0.1.0 && \
+    xx-go mod vendor && \
     CGO_ENABLED=0 xx-go build -o /usr/bin/dnsname ./plugins/meta/dnsname && \
     xx-verify --static /usr/bin/dnsname
 
@@ -163,10 +165,15 @@ COPY --link --from=cni-plugins /opt/cni/bin/firewall /buildkit-cni-firewall
 FROM scratch AS cni-plugins-export-squashed
 COPY --from=cni-plugins-export / /
 
+FROM --platform=$BUILDPLATFORM ghcr.io/loong64/alpine:${ALPINE_VERSION} AS binfmt-filter
+# built from https://github.com/tonistiigi/binfmt/releases/tag/buildkit%2Fv9.2.2-54
+COPY --link --from=ghcr.io/loong64/binfmt:buildkit-v9.2.2-35@sha256:560de850bd1097f648a4bb4dc1137cb1285b9b6bbd262c595de0f91532c9c0e8 / /out/
+WORKDIR /out/
+RUN rm buildkit-qemu-mips64 buildkit-qemu-mips64el
+
 FROM scratch AS binaries-linux
 COPY --link --from=runc /usr/bin/runc /buildkit-runc
-# built from https://github.com/tonistiigi/binfmt/releases/tag/buildkit%2Fv7.1.0-30
-COPY --link --from=ghcr.io/loong64/binfmt / /
+COPY --link --from=binfmt-filter /out/ /
 COPY --link --from=cni-plugins-export-squashed / /
 COPY --link --from=buildctl /usr/bin/buildctl /
 COPY --link --from=buildkitd /usr/bin/buildkitd /
@@ -197,11 +204,27 @@ RUN --mount=from=binaries \
 FROM scratch AS release
 COPY --link --from=releaser /out/ /
 
-FROM ghcr.io/loong64/alpine:${ALPINE_VERSION} AS buildkit-export
+FROM ghcr.io/loong64/alpine:${ALPINE_VERSION} AS buildkit-export-alpine
 RUN apk add --no-cache fuse3 git openssh pigz xz iptables ip6tables \
   && ln -s fusermount3 /usr/bin/fusermount
 COPY --link examples/buildctl-daemonless/buildctl-daemonless.sh /usr/bin/
 VOLUME /var/lib/buildkit
+
+FROM ghcr.io/loong64/debian:trixie AS buildkit-export-debian
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    fuse3 \
+    git \
+    openssh-client \
+    pigz \
+    xz-utils \
+    iptables \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+COPY --link examples/buildctl-daemonless/buildctl-daemonless.sh /usr/bin/
+VOLUME /var/lib/buildkit
+
+FROM buildkit-export-${EXPORT_BASE} AS buildkit-export
 
 FROM gobuild-base AS containerd-build
 WORKDIR /go/src/github.com/containerd/containerd
