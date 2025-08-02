@@ -41,7 +41,7 @@ Join `#buildkit` channel on [Docker Community Slack](https://dockr.ly/comm-slack
 ## Quick start
 
 ```sh
-docker run --privileged --rm tonistiigi/binfmt --install all
-docker buildx create --use --name mybuild --driver-opt image=ghcr.io/loong64/buildkit:buildx-stable-1
+docker run --privileged --rm ghcr.io/loong64/tonistiigi/binfmt --install all
+docker buildx create --use --name mybuild --driver-opt image=ghcr.io/loong64/moby/buildkit:buildx-stable-1
 docker buildx inspect --bootstrap --builder mybuild
 ```

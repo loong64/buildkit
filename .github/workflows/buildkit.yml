@@ -34,19 +34,19 @@ jobs:
       -
         name: Create Dockerfile
         run: |
-          wget -O Dockerfile.loong64 https://github.com/loong64/buildkit/raw/refs/heads/master/Dockerfile
+          wget -O /tmp/Dockerfile https://github.com/loong64/buildkit/raw/refs/heads/master/Dockerfile
       - 
         name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.loong64
+          file: /tmp/Dockerfile
           platforms: linux/loong64
           provenance: false
           push: true
           build-args: |
             BUILDPLATFORM=linux/loong64
-          tags: ghcr.io/${{ github.repository_owner }}/buildkit:buildx-stable-1
+          tags: ghcr.io/${{ github.repository_owner }}/moby/buildkit:buildx-stable-1
           outputs: type=image,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true
           cache-from: type=gha
           cache-to: type=gha,mode=max
