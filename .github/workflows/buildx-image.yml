@@ -32,7 +32,7 @@ on:
 
 env:
   SETUP_BUILDX_VERSION: "edge"
-  REPO_SLUG_TARGET: "moby/buildkit"
+  REPO_SLUG_TARGET: "ghcr.io/loong64/moby/buildkit"
 
 jobs:
   create:
@@ -49,6 +49,10 @@ jobs:
           - ''
           - 'rootless'
           - 'ubuntu'
+    permissions:
+      contents: write # same as global permission
+      packages: write
+      id-token: write # for signing attestation(s) with GitHub OIDC Token
     steps:
       -
         name: Set up Docker Buildx
@@ -63,7 +67,9 @@ jobs:
         env:
           DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.BUILDKIT_OIDC_CONNECTIONID }}
         with:
-          username: moby
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Create
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -93,7 +99,7 @@ jobs:
                 destTag = `${inpDestTag}-${inpFlavor}`;
               }
             }
-            createArgs.push('--tag', `moby/buildkit:${destTag}`, `moby/buildkit:${sourceTag}`);
+            createArgs.push('--tag', `ghcr.io/loong64/moby/buildkit:${destTag}`, `ghcr.io/loong64/moby/buildkit:${sourceTag}`);
             await exec.getExecOutput('docker', createArgs, {
               ignoreReturnCode: true
             }).then(res => {
