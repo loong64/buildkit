@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile-upstream:master
 
-ARG RUNC_VERSION=v1.3.6
+ARG RUNC_VERSION=v1.4.3
 ARG CONTAINERD_VERSION=v2.2.4
 # CONTAINERD_ALT_VERSION_... defines fallback containerd version for integration tests
 ARG CONTAINERD_ALT_VERSION_21=v2.1.8
@@ -26,7 +26,7 @@ ARG ALPINE_VERSION=3.23
 ARG UBUNTU_VERSION=24.04
 
 ARG GO_VERSION=1.26
-ARG XX_VERSION=1.9.0
+ARG XX_VERSION=master
 ARG BUILDKIT_DEBUG
 
 # minio for s3 integration tests
@@ -34,7 +34,7 @@ FROM quay.io/minio/minio:${MINIO_VERSION} AS minio
 FROM quay.io/minio/mc:${MINIO_MC_VERSION} AS minio-mc
 
 # xx is a helper for cross-compilation
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
+FROM --platform=$BUILDPLATFORM ghcr.io/loong64/tonistiigi/xx:${XX_VERSION} AS xx
 
 # golatest is alias for Go base image
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
@@ -156,6 +156,8 @@ ARG DNSNAME_VERSION
 ADD --keep-git-dir=true "https://github.com/containers/dnsname.git#$DNSNAME_VERSION" .
 ARG TARGETPLATFORM
 RUN --mount=target=/root/.cache,type=cache \
+    xx-go get -u golang.org/x/sys@v0.1.0 && \
+    xx-go mod vendor && \
     CGO_ENABLED=0 xx-go build -o /usr/bin/dnsname ./plugins/meta/dnsname && \
     xx-verify --static /usr/bin/dnsname
 
@@ -167,7 +169,7 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETPLATFORM
 WORKDIR /opt/cni/bin
-RUN curl -fsSL https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-${TARGETOS}-${TARGETARCH}-${CNI_VERSION}.tgz | tar xzv
+RUN curl -fsSL https://github.com/loong64/plugins/releases/download/${CNI_VERSION}/cni-plugins-${TARGETOS}-${TARGETARCH}-${CNI_VERSION}.tgz | tar xzv
 RUN xx-verify --static bridge loopback host-local
 COPY --link --from=dnsname /usr/bin/dnsname /opt/cni/bin/
 
@@ -182,9 +184,9 @@ COPY --from=cni-plugins-export / /
 
 FROM --platform=$BUILDPLATFORM alpine:${ALPINE_VERSION} AS binfmt-filter
 # built from https://github.com/tonistiigi/binfmt/releases/tag/buildkit%2Fv10.2.3-66
-COPY --link --from=tonistiigi/binfmt:buildkit-v10.2.3-66@sha256:6014c1e52b8e51a67fbf76f691ffbe20ac0204c31c2f086df3e8ef3ce134b488 / /out/
+COPY --link --from=ghcr.io/loong64/tonistiigi/binfmt / /out/
 WORKDIR /out/
-RUN rm -f buildkit-qemu-loongarch64 buildkit-qemu-mips64 buildkit-qemu-mips64el
+# RUN rm -f buildkit-qemu-loongarch64 buildkit-qemu-mips64 buildkit-qemu-mips64el
 
 FROM scratch AS binaries-linux
 COPY --link --from=runc /usr/bin/runc /buildkit-runc
@@ -220,13 +222,13 @@ RUN --mount=from=binaries \
 FROM scratch AS release
 COPY --link --from=releaser /out/ /
 
-FROM alpine:${ALPINE_VERSION} AS buildkit-export-alpine
+FROM ghcr.io/loong64/alpine:${ALPINE_VERSION} AS buildkit-export-alpine
 RUN apk add --no-cache fuse3 git openssh openssl pigz xz iptables ip6tables util-linux-misc \
   && ln -s fusermount3 /usr/bin/fusermount
 COPY --link examples/buildctl-daemonless/buildctl-daemonless.sh /usr/bin/
 VOLUME /var/lib/buildkit
 
-FROM ubuntu:${UBUNTU_VERSION} AS buildkit-export-ubuntu
+FROM ghcr.io/loong64/debian:trixie AS buildkit-export-ubuntu
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     fuse3 \
@@ -488,7 +490,7 @@ FROM integration-tests AS dev-env
 VOLUME /var/lib/buildkit
 
 # rootless builds a rootless variant of buildkitd image
-FROM alpine:${ALPINE_VERSION} AS rootless
+FROM ghcr.io/loong64/alpine:${ALPINE_VERSION} AS rootless
 RUN apk add --no-cache fuse3 fuse-overlayfs git openssh openssl pigz shadow-uidmap xz
 RUN adduser -D -u 1000 user \
   && mkdir -p /run/user/1000 /home/user/.local/tmp /home/user/.local/share/buildkit \
