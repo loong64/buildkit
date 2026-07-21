@@ -148,6 +148,7 @@ target "binaries-cross" {
     "linux/amd64",
     "linux/arm/v7",
     "linux/arm64",
+    "linux/loong64",
     "linux/s390x",
     "linux/ppc64le",
     "linux/riscv64",
@@ -182,6 +183,7 @@ target "image-cross" {
     "linux/amd64",
     "linux/arm/v7",
     "linux/arm64",
+    "linux/loong64",
     "linux/s390x",
     "linux/ppc64le",
     "linux/riscv64"
@@ -206,6 +208,7 @@ target "frontend-image-cross" {
     "linux/amd64",
     "linux/arm/v7",
     "linux/arm64",
+    "linux/loong64",
     "linux/mips",
     "linux/mipsle",
     "linux/mips64",
